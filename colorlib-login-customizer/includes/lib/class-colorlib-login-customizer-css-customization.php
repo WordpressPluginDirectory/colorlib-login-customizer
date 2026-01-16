@@ -1,29 +1,47 @@
 <?php
+declare( strict_types=1 );
+
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
 /**
- * Class Colorlib_Login_Customizer_Customization
+ * Class Colorlib_Login_Customizer_CSS_Customization
+ *
+ * Handles CSS generation and text customization for the login page.
  */
 class Colorlib_Login_Customizer_CSS_Customization {
+
 	/**
-	 * @var array
+	 * Plugin options.
+	 *
+	 * @var array<string, mixed>
 	 */
-	private $options = array();
+	private array $options = array();
+
 	/**
-	 * @var array
+	 * CSS selectors mapping.
+	 *
+	 * @var array<string, array<string, array<int, string>>>
 	 */
-	private $selectors = array();
+	private array $selectors = array();
+
 	/**
+	 * CLC WP options name.
+	 *
 	 * @var string
 	 */
-	private $base = '';
-
-	private $defaults;
+	public string $key_name;
 
 	/**
-	 * Colorlib_Login_Customizer_CSS_Customization constructor.
+	 * Default options.
+	 *
+	 * @var array<string, mixed>
+	 */
+	private array $defaults;
+
+	/**
+	 * Constructor.
 	 */
 	public function __construct() {
 		$plugin         = Colorlib_Login_Customizer::instance();
@@ -188,6 +206,14 @@ class Colorlib_Login_Customizer_CSS_Customization {
 				),
 				'options' => array(
 					'custom-background',
+					'custom-background-color',
+				),
+			),
+			'.ml-half-screen div.ml-form-container' => array(
+				'attributes' => array(
+					'background-color',
+				),
+				'options' => array(
 					'custom-background-color',
 				),
 			),
@@ -403,7 +429,7 @@ class Colorlib_Login_Customizer_CSS_Customization {
 		 * Set form field variables
 		 */
 		$string .= $this->create_css_lines(
-			'.login form .input, .login input[type="text"]',
+			'.login form .input, .login input[type="text"], .login input[type="password"]',
 			array(
 				'max-width',
 				'margin',
@@ -480,6 +506,18 @@ class Colorlib_Login_Customizer_CSS_Customization {
 			)
 		);
 
+		/**
+		 * Set background-color for half screens
+		 */
+		$string .= $this->create_css_lines(
+			'.ml-half-screen div.ml-form-container',
+			array(
+				'background-color',
+			),
+			array(
+				'custom-background-color',
+			)
+		);
 		return $string;
 
 	}
@@ -597,14 +635,9 @@ class Colorlib_Login_Customizer_CSS_Customization {
 				$val = $this->options[ $option ];
 
 				// 3 toggle buttons were replaced with one select, so we need to make sure
-				// h1 displays correctly
-				if ( 'logo-settings' == $option ) {
-
-					if ( 'hide-logo' == $val ) {
-						$val = '1';
-					} else {
-						$val = '0';
-					}
+				// h1 displays correctly.
+				if ( 'logo-settings' === $option ) {
+					$val = ( 'hide-logo' === $val ) ? '1' : '0';
 				}
 
 				$valued[ $properties[ $i ] ] = $val;
@@ -662,9 +695,34 @@ class Colorlib_Login_Customizer_CSS_Customization {
 		return $value;
 	}
 
+	/**
+	 * Sanitize CSS input to prevent injection attacks.
+	 *
+	 * @param string $css Raw CSS input.
+	 * @return string Sanitized CSS.
+	 */
+	private function sanitize_css( string $css ): string {
+		if ( empty( $css ) ) {
+			return '';
+		}
+
+		// Remove any potential script injections
+		$css = wp_strip_all_tags( $css );
+
+		// Remove potentially dangerous CSS expressions and behaviors
+		$css = preg_replace( '/expression\s*\(/i', '', $css );
+		$css = preg_replace( '/javascript\s*:/i', '', $css );
+		$css = preg_replace( '/behavior\s*:/i', '', $css );
+		$css = preg_replace( '/-moz-binding\s*:/i', '', $css );
+		$css = preg_replace( '/@import/i', '', $css );
+		$css = preg_replace( '/url\s*\(\s*["\']?\s*data:/i', 'url(', $css );
+
+		return $css;
+	}
+
 	public function body_class( $classes ) {
 
-		if ( '2' == $this->options['columns'] ) {
+		if ( '2' === $this->options['columns'] ) {
 			$classes[] = 'ml-half-screen';
 			if ( isset( $this->options['form-column-align'] ) ) {
 				$classes[] = 'ml-login-align-' . esc_attr( $this->options['form-column-align'] );
@@ -691,7 +749,7 @@ class Colorlib_Login_Customizer_CSS_Customization {
 	}
 
 	public function logo_url( $url ) {
-		if ( '' != $this->options['logo-url'] ) {
+		if ( '' !== $this->options['logo-url'] ) {
 			return esc_url( $this->options['logo-url'] );
 		}
 
@@ -715,15 +773,16 @@ class Colorlib_Login_Customizer_CSS_Customization {
 	}
 
 	/**
-	 * Output the inline CSS
+	 * Output the inline CSS.
+	 *
+	 * @return void
 	 */
-	public function generate_css() {
-		$instance    = Colorlib_Login_Customizer::instance();
+	public function generate_css(): void {
 		$css         = $this->create_css();
 		$custom_css  = $this->options['custom-css'];
 		$columns_css = '';
 
-		if ( 2 == $this->options['columns'] ) {
+		if ( 2 === (int) $this->options['columns'] ) {
 			$widths = $this->options['columns-width'];
 
 			$left_width = ( 100 / 12 )*absint( $widths['left'] );
@@ -752,23 +811,22 @@ class Colorlib_Login_Customizer_CSS_Customization {
 
 		$logo_css = '.login.clc-both-logo h1 a{width:100%;height:100%;text-indent: unset;background-position:top center !important;padding-top:' . (30 + absint( $this->options['logo-height'] )) . 'px; background-size: ' . $backgriund_size . '; margin-top: -' . (15 + absint( $this->options['logo-height'] )) . 'px; position:relative;background-image:url(' . $background_image . ')}';
 
-		echo '<style type="text/css">.language-switcher{z-index:9;margin:0;}.login label{display:block;}#registerform #wp-submit{float:none;margin-top:15px;}.login.clc-text-logo:not(.clc-both-logo) h1 a{ background-image: none !important;text-indent: unset;width:auto !important;height: auto !important; }#login form p label br{display:none}body:not( .ml-half-screen ) .ml-form-container{background:transparent !important;}.login:not(.clc-both-logo) h1 a{background-position: center;background-size:contain !important;}.ml-container #login{ position:relative;padding: 0;width:100%;max-width:320px;margin:0;}#loginform,#registerform,#lostpasswordform{box-sizing: border-box;max-height: 100%;background-position: center;background-repeat: no-repeat;background-size: cover;}.ml-container{position:relative;min-height:100vh;display:flex;height:100%;min-width:100%;}.ml-container .ml-extra-div{background-position:center;background-size:cover;background-repeat:no-repeat}body .ml-form-container{display:flex;align-items:center;justify-content:center;flex-flow:column;}body:not( .ml-half-screen ) .ml-container .ml-extra-div{position:absolute;top:0;left:0;width:100%;height:100%}body:not( .ml-half-screen ) .ml-container .ml-form-container{width:100%;min-height:100vh;display:flex;flex-flow:column;}body.ml-half-screen .ml-container{flex-wrap:wrap}body.ml-half-screen .ml-container>.ml-extra-div,body.ml-half-screen .ml-container>.ml-form-container{width:50%}body.ml-half-screen.ml-login-align-2 .ml-container>div,body.ml-half-screen.ml-login-align-4 .ml-container>div{width:100%;flex-basis:50%;}body.ml-half-screen.ml-login-align-2 .ml-container{flex-direction:column-reverse}body.ml-half-screen.ml-login-align-4 .ml-container{flex-direction:column}body.ml-half-screen.ml-login-align-1 .ml-container{flex-direction:row-reverse}body.ml-login-vertical-align-1 .ml-form-container{align-items:flex-start}body.ml-login-vertical-align-3 .ml-form-container{align-items:flex-end}body.ml-login-horizontal-align-1 .ml-form-container{justify-content:flex-start}body.ml-login-horizontal-align-3 .ml-form-container{justify-content:flex-end}@media only screen and (max-width: 768px) {body.ml-half-screen .ml-container > .ml-extra-div, body.ml-half-screen .ml-container > .ml-form-container{width:50% !important;}}.login input[type=text]:focus, .login input[type=search]:focus, .login input[type=radio]:focus, .login input[type=tel]:focus, .login input[type=time]:focus, .login input[type=url]:focus, .login input[type=week]:focus, .login input[type=password]:focus, .login input[type=checkbox]:focus, .login input[type=color]:focus, .login input[type=date]:focus, .login input[type=datetime]:focus, .login input[type=datetime-local]:focus, .login input[type=email]:focus, .login input[type=month]:focus, .login input[type=number]:focus, .login select:focus, .login textarea:focus{ box-shadow: none; }@media only screen and (max-width: 577px){body.ml-half-screen .ml-container > .ml-extra-div, body.ml-half-screen .ml-container > .ml-form-container{width:100% !important;}body.ml-half-screen.ml-login-align-1 .ml-container .ml-extra-div, body.ml-half-screen.ml-login-align-1 .ml-container .ml-form-container,body.ml-half-screen.ml-login-align-3 .ml-container .ml-extra-div,body.ml-half-screen.ml-login-align-3 .ml-container .ml-form-container{ width: 100%; }body.ml-half-screen.ml-login-align-1 .ml-container .ml-extra-div,body.ml-half-screen.ml-login-align-3 .ml-container .ml-extra-div{position: absolute;top: 0;left: 0;width: 100%;height: 100%;}}</style>';
+		echo '<style type="text/css">' . $this->get_base_css() . '</style>';
 		echo '<style type="text/css" id="clc-style">' . $css . '</style>';
 		echo '<style type="text/css" id="clc-columns-style">' . $columns_css . '</style>';
 		echo '<style type="text/css" id="clc-logo-style">' . $logo_css . '</style>';
-		echo '<style type="text/css" id="clc-custom-css">' . $custom_css . '</style>';
+		echo '<style type="text/css" id="clc-custom-css">' . $this->sanitize_css( $custom_css ) . '</style>';
 		echo '<style type="text/css" id="clc-custom-background-link"> body .ml-container .ml-extra-div .clc-custom-background-link {display:block; width:100%; height:100%;} </style>';
 	}
 
 	public function add_extra_div() {
 
-		$options = get_option( 'clc-options');
+		$options = get_option( 'clc-options' );
 
-		if( isset( $options['custom-background'] ) && '' != $options['custom-background'] && isset( $options['custom-background-link'] ) && '' != $options['custom-background-link']  ) {
-			echo '<div class="ml-container"><div class="ml-extra-div"><a class="clc-custom-background-link" href="' . $options['custom-background-link'] . '"></a></div><div class="ml-form-container">';
+		if ( isset( $options['custom-background'] ) && '' !== $options['custom-background'] && isset( $options['custom-background-link'] ) && '' !== $options['custom-background-link'] ) {
+			echo '<div class="ml-container"><div class="ml-extra-div"><a class="clc-custom-background-link" href="' . esc_url( $options['custom-background-link'] ) . '"></a></div><div class="ml-form-container">';
 		} else {
-
-			echo '<div class="ml-container"><div class="ml-extra-div"></a></div><div class="ml-form-container">';
+			echo '<div class="ml-container"><div class="ml-extra-div"></div><div class="ml-form-container">';
 		}
 	}
 
@@ -1164,4 +1222,192 @@ class Colorlib_Login_Customizer_CSS_Customization {
 
         return $translated_text;
     }
+
+	/**
+	 * Get the base CSS for the login page
+	 *
+	 * @return string
+	 * @since 1.3.2
+	 */
+	private function get_base_css() {
+		return '
+		/* Hide third-party theme customizer overlays (Astra, etc.) */
+		.ast-style-guide-wrapper,
+		.ast-quick-tour-body,
+		.ast-close-tour,
+		.ast-tour-inner-wrap {
+			display: none !important;
+		}
+		.language-switcher{
+			z-index:9;
+			margin:0;
+		}
+		#registerform #wp-submit{
+			float:none;
+			margin-top:15px;
+		}
+		.login.clc-text-logo:not(.clc-both-logo) h1 a{
+			 background-image: none !important;
+			text-indent: unset;
+			width:auto !important;
+			height: auto !important;
+		}
+		#login form p label br{
+			display:none
+		}
+		body:not( .ml-half-screen ) .ml-form-container{
+			background:transparent !important;
+		}
+		.login:not(.clc-both-logo) h1 a{
+			background-position: center;
+			background-size:contain !important;
+		}
+		.ml-container #login{
+			 position:relative;
+			padding: 0;
+			width:100%;
+			max-width:320px;
+			margin:0;
+		}
+		#loginform,#registerform,#lostpasswordform{
+			box-sizing: border-box;
+			max-height: 100%;
+			background-position: center;
+			background-repeat: no-repeat;
+			background-size: cover;
+		}
+		/* Fix password field width to match username field */
+		.login form .input,
+		.login input[type="text"],
+		.login input[type="password"],
+		.login input[type="email"]{
+			width: 100% !important;
+			box-sizing: border-box !important;
+		}
+		.login .user-pass-wrap{
+			display: block !important;
+		}
+		.login .user-pass-wrap > label{
+			display: block !important;
+		}
+		.login .wp-pwd{
+			position: relative !important;
+			display: block !important;
+		}
+		.login .wp-pwd input[type="password"]{
+			width: 100% !important;
+			padding-right: 50px !important;
+			box-sizing: border-box !important;
+		}
+		.login .wp-pwd .wp-hide-pw{
+			position: absolute !important;
+			right: 0 !important;
+			top: 35% !important;
+			transform: translateY(-50%) !important;
+			height: auto !important;
+			width: 44px !important;
+			padding: 0 !important;
+			margin: 0 !important;
+			display: flex !important;
+			align-items: center !important;
+			justify-content: center !important;
+			background: transparent !important;
+			border: none !important;
+			box-shadow: none !important;
+			cursor: pointer !important;
+			z-index: 10 !important;
+		}
+		.login .wp-pwd .wp-hide-pw .dashicons{
+			position: static !important;
+			top: auto !important;
+			margin: 0 !important;
+			padding: 0 !important;
+		}
+		.ml-container{
+			position:relative;
+			min-height:100vh;
+			display:flex;
+			height:100%;
+			min-width:100%;
+		}
+		.ml-container .ml-extra-div{
+			background-position:center;
+			background-size:cover;
+			background-repeat:no-repeat
+		}
+		body .ml-form-container{
+			display:flex;
+			align-items:center;
+			justify-content:center;
+		}
+		body:not( .ml-half-screen ) .ml-container .ml-extra-div{
+			position:absolute;
+			top:0;
+			left:0;
+			width:100%;
+			height:100%
+		}
+		body:not( .ml-half-screen ) .ml-container .ml-form-container{
+			width:100%;
+			min-height:100vh;
+		}
+		body.ml-half-screen .ml-container{
+			flex-wrap:wrap
+		}
+		body.ml-half-screen .ml-container>.ml-extra-div,body.ml-half-screen .ml-container>.ml-form-container{
+			width:50%
+		}
+		body.ml-half-screen.ml-login-align-2 .ml-container>div,body.ml-half-screen.ml-login-align-4 .ml-container>div{
+			width:100%;
+			flex-basis:50%;
+		}
+		body.ml-half-screen.ml-login-align-2 .ml-container{
+			flex-direction:column-reverse
+		}
+		body.ml-half-screen.ml-login-align-4 .ml-container{
+			flex-direction:column
+		}
+		body.ml-half-screen.ml-login-align-1 .ml-container{
+			flex-direction:row-reverse
+		}
+		body.ml-login-vertical-align-1 .ml-form-container{
+			align-items:flex-start
+		}
+		body.ml-login-vertical-align-3 .ml-form-container{
+			align-items:flex-end
+		}
+		body.ml-login-horizontal-align-1 .ml-form-container{
+			justify-content:flex-start
+		}
+		body.ml-login-horizontal-align-3 .ml-form-container{
+			justify-content:flex-end
+		}
+		@media only screen and (max-width: 768px) {
+			body.ml-half-screen .ml-container > .ml-extra-div, body.ml-half-screen .ml-container > .ml-form-container{
+				width:50% !important;
+			}
+			.login h1 a{
+				max-width: 100%;
+			}
+		}
+		.login input[type=text]:focus, .login input[type=search]:focus, .login input[type=radio]:focus, .login input[type=tel]:focus, .login input[type=time]:focus, .login input[type=url]:focus, .login input[type=week]:focus, .login input[type=password]:focus, .login input[type=checkbox]:focus, .login input[type=color]:focus, .login input[type=date]:focus, .login input[type=datetime]:focus, .login input[type=datetime-local]:focus, .login input[type=email]:focus, .login input[type=month]:focus, .login input[type=number]:focus, .login select:focus, .login textarea:focus{
+			 box-shadow: none;
+		}
+		@media only screen and (max-width: 577px){
+			body.ml-half-screen .ml-container > .ml-extra-div, body.ml-half-screen .ml-container > .ml-form-container{
+				width:100% !important;
+			}
+			body.ml-half-screen.ml-login-align-1 .ml-container .ml-extra-div, body.ml-half-screen.ml-login-align-1 .ml-container .ml-form-container,body.ml-half-screen.ml-login-align-3 .ml-container .ml-extra-div,body.ml-half-screen.ml-login-align-3 .ml-container .ml-form-container{
+				 width: 100%;
+			}
+			body.ml-half-screen.ml-login-align-1 .ml-container .ml-extra-div,body.ml-half-screen.ml-login-align-3 .ml-container .ml-extra-div{
+				position: absolute;
+				top: 0;
+				left: 0;
+				width: 100%;
+				height: 100%;
+			}
+		}
+		';
+	}
 }
